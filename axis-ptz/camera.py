@@ -16,11 +16,11 @@ import re
 import requests
 from requests.auth import HTTPDigestAuth
 import errno
-import paho.mqtt.client as mqtt 
+import paho.mqtt.client as mqtt
 from json.decoder import JSONDecodeError
-from sensecam_control import vapix_control,vapix_config
+from sensecam_control import onvif_control,onvif_config
 import utils
-
+from hikvisionapi import Client
 
 import logging
 import coloredlogs
@@ -30,8 +30,8 @@ logging.config.dictConfig({
     'version': 1,
     'disable_existing_loggers': True,
 })
-logging.getLogger("vapix_control.py").setLevel(logging.WARNING)
-logging.getLogger("vapix_control").setLevel(logging.WARNING)
+logging.getLogger("onvif_control.py").setLevel(logging.WARNING)
+logging.getLogger("onvif_control").setLevel(logging.WARNING)
 logging.getLogger("sensecam_control").setLevel(logging.WARNING)
 
 ID = str(random.randint(1,100001))
@@ -96,12 +96,18 @@ def get_jpeg_request():  # 5.2.4.1
         'compression': 5,
         'camera': 1,
     }
-    url = 'http://' + args.axis_ip + '/axis-cgi/jpg/image.cgi'
+
+    # view = Client('http://' + args.axis_ip, args.axis_username, args.axis_password)
+
+
+    # url = 'http://' + args.axis_ip + '/axis-cgi/jpg/image.cgi'
     start_time = datetime.now()
+    view = Client('http://' + args.axis_ip, AXIS_USERNAME, AXIS_PASSWORD)
     try:
-        resp = requests.get(url, auth=HTTPDigestAuth(args.axis_username, args.axis_password), params=payload, timeout=0.5)
-    except requests.exceptions.Timeout:
-        logging.info("🚨 Images capture request timed out 🚨  ")
+        resp = view.Streaming.channels[102].picture(method='get', type='opaque_data')
+        # resp = requests.get(url, auth=HTTPDigestAuth(args.axis_username, args.axis_password), params=payload, timeout=0.5)
+    except Exception:
+        logging.info("Image capture request failed ")
         return
 
     disk_time = datetime.now()
@@ -114,9 +120,14 @@ def get_jpeg_request():  # 5.2.4.1
                 raise  # This was not a "directory exist" error..
         filename = "{}/{}_{}_{}_{}_{}.jpg".format(captureDir, currentPlane["icao24"], int(bearing), int(elevation), int(distance3d), datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
 
-        # Original
+
         with open(filename, 'wb') as var:
-            var.write(resp.content)
+          for chunk in resp.iter_content(chunk_size=1024):
+            if chunk:
+               var.write(chunk)
+        # Original
+        # with open(filename, 'wb') as var:
+        #    var.write(resp.content)
 
         #Non-Blocking
         #fd = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_NONBLOCK)
@@ -220,8 +231,8 @@ def moveCamera(ip, username, password):
     capturePeriod = 1000 # milliseconds
     moveTimeout = datetime.now()
     captureTimeout = datetime.now()
-    camera = vapix_control.CameraControl(ip, username, password)
-    
+    camera = onvif_control.CameraControl(ip, username, password)
+    camera.camera_start()
     while True:
         if active:
             if not "icao24" in currentPlane:
@@ -229,7 +240,11 @@ def moveCamera(ip, username, password):
                 continue
             if moveTimeout <= datetime.now():
                 calculateCameraPosition()
-                camera.absolute_move(cameraPan, cameraTilt, cameraZoom, cameraMoveSpeed)
+                logging.info(f"Move To: {cameraPan/360.} {cameraTilt/90.} 0.0")
+                # pitch = tilt
+                # yaw = pan
+                # camera.absolute_move(round(cameraPan/360., 4), round(cameraTilt/90, 4), 0.0) #, cameraMoveSpeed)
+                camera.absolute_move(round(cameraPan/360., 4), round(cameraTilt/90, 4), 0.0) #, cameraMoveSpeed)
                 #logging.info("Moving to Pan: {} Tilt: {}".format(cameraPan, cameraTilt))
                 moveTimeout = moveTimeout + timedelta(milliseconds=movePeriod)
                 if moveTimeout <= datetime.now():
@@ -406,7 +421,7 @@ def main():
                                 '%(message)s')
 
     logging.info("---[ Starting %s ]---------------------------------------------" % sys.argv[0])
-    #camera = vapix_control.CameraControl(args.axis_ip, args.axis_username, args.axis_password)
+    #camera = onvif_control.CameraControl(args.axis_ip, args.axis_username, args.axis_password)
     cameraDelay = args.camera_delay
     cameraMoveSpeed = args.camera_move_speed
     cameraZoom = args.camera_zoom
@@ -414,7 +429,7 @@ def main():
     camera_latitude = args.lat
     camera_altitude = args.alt # Altitude is in METERS
     camera_lead = args.camera_lead
-    #cameraConfig = vapix_config.CameraConfiguration(args.axis_ip, args.axis_username, args.axis_password)
+    #cameraConfig = onvif_config.CameraConfiguration(args.axis_ip, args.axis_username, args.axis_password)
 
     cameraMove = threading.Thread(target=moveCamera, args=[args.axis_ip, args.axis_username, args.axis_password],daemon=True)
     cameraMove.start()
@@ -451,7 +466,7 @@ def main():
                 
         delay = 0.1
         time.sleep(delay)
-
+    
 
 
 if __name__ == "__main__":

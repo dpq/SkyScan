@@ -1,1 +1,2 @@
 sensecam-control
+hikvisionapi

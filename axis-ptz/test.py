@@ -8,7 +8,7 @@ import coloredlogs
 import sys
 import os
 import time
-from sensecam_control import vapix_control,vapix_config
+from sensecam_control import onvif_control,onvif_config
 
 
 def main():
@@ -42,7 +42,7 @@ def main():
                                 '%(message)s')
     print("hello")
     logging.info("---[ Starting %s ]---------------------------------------------" % sys.argv[0])
-    camera = vapix_control.CameraControl(args.axis_ip, args.axis_username, args.axis_password)
+    camera = onvif_control.CameraControl(args.axis_ip, args.axis_username, args.axis_password)
     print("hello")
     #############################################
     ##                Main Loop                ##

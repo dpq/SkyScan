@@ -1,7 +1,7 @@
 
 import logging
 import math
-from sensecam_control import vapix_control,vapix_config
+from sensecam_control import onvif_control,onvif_config
 import argparse
 
 def deg2rad(deg: float) -> float:
@@ -107,7 +107,7 @@ def main():
     parser.add_argument('-a', '--axis-ip', help="IP address for the Axis camera", required=True)
     args = parser.parse_args()
     print(args)
-    camera = vapix_control.CameraControl(args.axis_ip, args.axis_username, args.axis_password)
+    camera = onvif_control.CameraControl(args.axis_ip, args.axis_username, args.axis_password)
 
     print(camera)
     camera_longitude = args.lon

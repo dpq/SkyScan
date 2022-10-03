@@ -1,4 +1,4 @@
-FROM "mjenz/rpi-mosquitto"
+FROM "eclipse-mosquitto"
 
 COPY ./mosquitto.conf /etc/mosquitto/  
 

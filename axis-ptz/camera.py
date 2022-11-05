@@ -105,7 +105,7 @@ def get_jpeg_request():  # 5.2.4.1
     }
 
     start_time = datetime.now()
-    view = Client('http://' + args.axis_ip, AXIS_USERNAME, AXIS_PASSWORD)
+    view = Client('http://' + args.axis_ip, args.axis_username, args.axis_password)
     try:
         resp = view.Streaming.channels[102].picture(method='get', type='opaque_data')
     except Exception:
@@ -236,12 +236,12 @@ def moveCamera(ip, username, password):
                 continue
             if moveTimeout <= datetime.now():
                 set_bearing_correction(0)
-                set_bearing_correction(-calculate_bearing_offset([LAT_ZLANDMARK_HIK_POSITIVE, LONG_ZLANDMARK_HIK_POSITIVE]))
+                set_bearing_correction(-calculate_bearing_offset([args.lat_landmark_pos, args.lon_landmark_pos]))
                 calculateCameraPosition()
                 if cameraPan < 0:
                     print('fixing for the negative<>zero gap')
                     set_bearing_correction(0)
-                    set_bearing_correction(-calculate_bearing_offset([LAT_ZLANDMARK_HIK_NEGATIVE, LONG_ZLANDMARK_HIK_NEGATIVE]))
+                    set_bearing_correction(-calculate_bearing_offset([args.lat_landmark_neg, args.lon_landmark_neg]))
                     calculateCameraPosition()
                 logging.info(f"Move To: {cameraPan/180.} {cameraTilt/90.} 0.0")
                 # pitch = tilt
@@ -390,6 +390,12 @@ def main():
     parser = argparse.ArgumentParser(description='An MQTT based camera controller')
     parser.add_argument('--lat', type=float, help="Latitude of camera")
     parser.add_argument('--lon', type=float, help="Longitude of camera")
+
+    parser.add_argument('--lat-landmark-pos', type=float, help="Latitude of positive side landmark")
+    parser.add_argument('--lon-landmark-pos', type=float, help="Longitude of positive side landmark")
+    parser.add_argument('--lat-landmark-neg', type=float, help="Latitude of negative side landmark")
+    parser.add_argument('--lon-landmark-neg', type=float, help="Longitude of negative side landmark")
+
     parser.add_argument('--alt', type=float, help="altitude of camera in METERS!", default=0)
     parser.add_argument('--camera-lead', type=float, help="how many seconds ahead of a plane's predicted location should the camera be positioned", default=0.1)
 

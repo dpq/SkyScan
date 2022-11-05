@@ -56,7 +56,11 @@ def bearingFromCoordinate( cameraPosition, airplanePosition, heading):
     x = math.cos(lat2*math.pi/float(180)) * math.sin(lat1*math.pi/float(180)) - math.sin(lat2*math.pi/float(180)) * math.cos(lat1*math.pi/float(180)) * math.cos(dLon*math.pi/float(180))
 
     brng = math.atan2(-y, x)*180/math.pi
+
+    # Get rid of negative angles
     brng = (brng + 360) % 360
+
+    # Change the direction
     brng = 360 - brng
     brng -= heading
     brng = (brng + 360) % 360

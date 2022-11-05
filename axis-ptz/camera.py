@@ -60,7 +60,14 @@ angularVelocityHorizontal = 0      # in meters
 angularVelocityVertical = 0      # in meters
 planeTrack = 0      # This is the direction that the plane is moving in
 
+max_positive_pan = 0.29
+min_negative_pan = -0.37
+
 currentPlane=None
+
+def set_bearing_correction(c):
+    global cameraBearingCorrection
+    cameraBearingCorrection = c
 
 def calculate_bearing_correction(b):
     return (b + cameraBearingCorrection) % 360
@@ -97,15 +104,10 @@ def get_jpeg_request():  # 5.2.4.1
         'camera': 1,
     }
 
-    # view = Client('http://' + args.axis_ip, args.axis_username, args.axis_password)
-
-
-    # url = 'http://' + args.axis_ip + '/axis-cgi/jpg/image.cgi'
     start_time = datetime.now()
     view = Client('http://' + args.axis_ip, AXIS_USERNAME, AXIS_PASSWORD)
     try:
         resp = view.Streaming.channels[102].picture(method='get', type='opaque_data')
-        # resp = requests.get(url, auth=HTTPDigestAuth(args.axis_username, args.axis_password), params=payload, timeout=0.5)
     except Exception:
         logging.info("Image capture request failed ")
         return
@@ -120,25 +122,10 @@ def get_jpeg_request():  # 5.2.4.1
                 raise  # This was not a "directory exist" error..
         filename = "{}/{}_{}_{}_{}_{}.jpg".format(captureDir, currentPlane["icao24"], int(bearing), int(elevation), int(distance3d), datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
 
-
         with open(filename, 'wb') as var:
-          for chunk in resp.iter_content(chunk_size=1024):
-            if chunk:
-               var.write(chunk)
-        # Original
-        # with open(filename, 'wb') as var:
-        #    var.write(resp.content)
-
-        #Non-Blocking
-        #fd = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_NONBLOCK)
-        #os.write(fd, resp.content)
-        #os.close(fd)
-
-        # Blocking
-
-        #fd = os.open(filename, os.O_CREAT | os.O_WRONLY)
-        #os.write(fd, resp.content)
-        #os.close(fd)
+            for chunk in resp.iter_content(chunk_size=1024):
+                if chunk:
+                    var.write(chunk)
     else:
         logging.error("Unable to fetch image: {}\tstatus: {}".format(url,resp.status_code))
 
@@ -201,6 +188,11 @@ def get_bmp_request():  # 5.2.4.1
     text += str(resp.text)
     return text
 
+
+def calculate_bearing_offset(landmark):
+    return utils.bearingFromCoordinate( airplanePosition=[landmark[0], landmark[1]], cameraPosition=[camera_latitude, camera_longitude], heading=180.0)
+
+
 def calculateCameraPosition():
     global cameraPan
     global cameraTilt
@@ -211,6 +203,7 @@ def calculateCameraPosition():
     global angularVelocityVertical
     global elevation
 
+    print(camera_latitude)
     (lat, lon, alt) = utils.calc_travel_3d(currentPlane, camera_lead)
     distance3d = utils.coordinate_distance_3d(camera_latitude, camera_longitude, camera_altitude, lat, lon, alt)
     #(latorig, lonorig) = utils.calc_travel(observation.getLat(), observation.getLon(), observation.getLatLonTime(),  observation.getGroundSpeed(), observation.getTrack(), camera_lead)
@@ -222,11 +215,14 @@ def calculateCameraPosition():
     cameraTilt = elevation
     cameraPan = utils.cameraPanFromCoordinate(cameraPosition=[camera_latitude, camera_longitude], airplanePosition=[lat, lon])
     cameraPan = calculate_bearing_correction(cameraPan)
-
+    if cameraPan > 180:
+        cameraPan = 360 - cameraPan
+    else:
+        cameraPan = - cameraPan
+    cameraTilt = 90 - cameraTilt
 
 
 def moveCamera(ip, username, password):
-
     movePeriod = 250  # milliseconds
     capturePeriod = 1000 # milliseconds
     moveTimeout = datetime.now()
@@ -239,13 +235,20 @@ def moveCamera(ip, username, password):
                 logging.info(" 🚨 Active but Current Plane is not set")
                 continue
             if moveTimeout <= datetime.now():
+                set_bearing_correction(0)
+                set_bearing_correction(-calculate_bearing_offset([LAT_ZLANDMARK_HIK_POSITIVE, LONG_ZLANDMARK_HIK_POSITIVE]))
                 calculateCameraPosition()
-                logging.info(f"Move To: {cameraPan/360.} {cameraTilt/90.} 0.0")
+                if cameraPan < 0:
+                    print('fixing for the negative<>zero gap')
+                    set_bearing_correction(0)
+                    set_bearing_correction(-calculate_bearing_offset([LAT_ZLANDMARK_HIK_NEGATIVE, LONG_ZLANDMARK_HIK_NEGATIVE]))
+                    calculateCameraPosition()
+                logging.info(f"Move To: {cameraPan/180.} {cameraTilt/90.} 0.0")
                 # pitch = tilt
                 # yaw = pan
-                # camera.absolute_move(round(cameraPan/360., 4), round(cameraTilt/90, 4), 0.0) #, cameraMoveSpeed)
-                camera.absolute_move(round(cameraPan/360., 4), round(cameraTilt/90, 4), 0.0) #, cameraMoveSpeed)
-                #logging.info("Moving to Pan: {} Tilt: {}".format(cameraPan, cameraTilt))
+                if cameraPan >= max_positive_pan or cameraPan <= min_negative_pan:
+                    continue
+                camera.absolute_move(round(cameraPan/180., 4), round(cameraTilt/90, 4), 0.0)
                 moveTimeout = moveTimeout + timedelta(milliseconds=movePeriod)
                 if moveTimeout <= datetime.now():
                     lag = datetime.now() - moveTimeout
